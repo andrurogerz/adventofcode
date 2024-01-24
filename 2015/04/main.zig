@@ -2,8 +2,14 @@ const std = @import("std");
 
 pub fn main() !void {
     const input = @embedFile("input.txt");
-    const result = try part_1(input[0..8]);
-    std.debug.print("part 1 result: {}\n", .{result});
+    {
+        const result = try part_1(input[0..8]);
+        std.debug.print("part 1 result: {}\n", .{result});
+    }
+    {
+        const result = try part_2(input[0..8]);
+        std.debug.print("part 2 result: {}\n", .{result});
+    }
 }
 
 const Md5 = std.crypto.hash.Md5;
@@ -13,6 +19,18 @@ fn part_1(input: []const u8) !usize {
     while (true) {
         const digest = try hash(input, value);
         if (digest[0] == 0 and digest[1] == 0 and digest[2] <= 0xF) {
+            break;
+        }
+        value += 1;
+    }
+    return value;
+}
+
+fn part_2(input: []const u8) !usize {
+    var value: usize = 1;
+    while (true) {
+        const digest = try hash(input, value);
+        if (digest[0] == 0 and digest[1] == 0 and digest[2] == 0) {
             break;
         }
         value += 1;
