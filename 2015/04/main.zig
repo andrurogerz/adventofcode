@@ -1,3 +1,4 @@
+//! https://adventofcode.com/2015/day/4
 const std = @import("std");
 
 pub fn main() !void {

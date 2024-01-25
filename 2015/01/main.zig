@@ -1,3 +1,4 @@
+//! https://adventofcode.com/2015/day/1
 const std = @import("std");
 
 pub fn part_1(input: []const u8) i64 {
