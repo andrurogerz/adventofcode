@@ -54,7 +54,7 @@ fn paperAreaForPackage(pkg_str: []const u8) !usize {
 fn ribbonLengthForPackage(pkg_str: []const u8) !usize {
     const edge_lengths = try parsePackageDimensions(pkg_str);
     const face_perimeter_lengths = [_]usize{
-        *(edge_lengths[0] + edge_lengths[1]),
+        2 * (edge_lengths[0] + edge_lengths[1]),
         2 * (edge_lengths[1] + edge_lengths[2]),
         2 * (edge_lengths[2] + edge_lengths[0]),
     };
