@@ -3,8 +3,14 @@ const std = @import("std");
 
 pub fn main() !void {
     const input = @embedFile("input.txt");
-    const result = try part_1(input);
-    std.debug.print("part 1 result: {}\n", .{result});
+    {
+        const result = try part_1(input);
+        std.debug.print("part 1 result: {}\n", .{result});
+    }
+    {
+        const result = try part_2(input);
+        std.debug.print("part 2 result: {}\n", .{result});
+    }
 }
 
 fn part_1(input: []const u8) !usize {
@@ -15,6 +21,16 @@ fn part_1(input: []const u8) !usize {
         try lights.execute(instr);
     }
     return lights.onCount();
+}
+
+fn part_2(input: []const u8) !usize {
+    var lights = LightSet{};
+    var line_iter = std.mem.tokenizeSequence(u8, input, "\n");
+    while (line_iter.next()) |line_str| {
+        const instr = try parseInstruction(line_str);
+        try lights.execute2(instr);
+    }
+    return lights.brightness();
 }
 
 fn parseInstruction(line_str: []const u8) !LightSet.Instruction {
@@ -72,7 +88,7 @@ fn LightSetT(comptime C: usize, comptime R: usize) type {
     return struct {
         const Self = @This();
 
-        light_set: std.StaticBitSet(C * R) = std.StaticBitSet(C * R).initEmpty(),
+        light_set: [C * R]usize = [_]usize{0} ** (C * R),
 
         pub const Op = enum {
             Toggle,
@@ -96,16 +112,41 @@ fn LightSetT(comptime C: usize, comptime R: usize) type {
                 for (instr.start.row..(instr.end.row + 1)) |row| {
                     const idx = try indexOf(.{ .row = row, .col = col });
                     switch (instr.op) {
-                        .Toggle => self.light_set.toggle(idx),
-                        .TurnOn => self.light_set.set(idx),
-                        .TurnOff => self.light_set.unset(idx),
+                        .Toggle => self.light_set[idx] = if (self.light_set[idx] == 1) 0 else 1,
+                        .TurnOn => self.light_set[idx] = 1,
+                        .TurnOff => self.light_set[idx] = 0,
+                    }
+                }
+            }
+        }
+
+        pub fn execute2(self: *Self, instr: Instruction) !void {
+            for (instr.start.col..(instr.end.col + 1)) |col| {
+                for (instr.start.row..(instr.end.row + 1)) |row| {
+                    const idx = try indexOf(.{ .row = row, .col = col });
+                    switch (instr.op) {
+                        .Toggle => self.light_set[idx] += 2,
+                        .TurnOn => self.light_set[idx] += 1,
+                        .TurnOff => self.light_set[idx] = if (self.light_set[idx] == 0) 0 else self.light_set[idx] - 1,
                     }
                 }
             }
         }
 
         pub fn onCount(self: *const Self) usize {
-            return self.light_set.count();
+            var result: usize = 0;
+            for (self.light_set) |value| {
+                result += if (value == 0) 0 else 1;
+            }
+            return result;
+        }
+
+        pub fn brightness(self: *const Self) usize {
+            var result: usize = 0;
+            for (self.light_set) |value| {
+                result += value;
+            }
+            return result;
         }
 
         fn indexOf(pos: Position) !usize {
@@ -138,5 +179,19 @@ test "part 1 example input" {
         const instr = try parseInstruction("turn off 499,499 through 500,500");
         try lights.execute(instr);
         try testing.expectEqual(lights.onCount(), 1000000 - 1000 - 4);
+    }
+}
+
+test "part 2 example input" {
+    var lights = LightSet{};
+    {
+        const instr = try parseInstruction("turn on 0,0 through 0,0");
+        try lights.execute2(instr);
+        try testing.expectEqual(lights.brightness(), 1);
+    }
+    {
+        const instr = try parseInstruction("toggle 0,0 through 999,999");
+        try lights.execute2(instr);
+        try testing.expectEqual(lights.brightness(), 1 + 2000000);
     }
 }
