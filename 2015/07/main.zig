@@ -1,10 +1,16 @@
-//! https://adventofcode.com/2015/day/6
+//! https://adventofcode.com/2015/day/7
 const std = @import("std");
 
 pub fn main() !void {
     const input = @embedFile("input.txt");
-    const result = try part_1(input);
-    std.debug.print("part 1 result: {}\n", .{result});
+    {
+        const result = try part_1(input);
+        std.debug.print("part 1 result: {}\n", .{result});
+    }
+    {
+        const result = try part_2(input);
+        std.debug.print("part 2 result: {}\n", .{result});
+    }
 }
 
 fn part_1(input: []const u8) !usize {
@@ -16,7 +22,27 @@ fn part_1(input: []const u8) !usize {
     defer circuit.deinit();
 
     try parseCircuit(&circuit, input);
-    return try circuit.getValueAt("a");
+    return try circuit.getSignalAt("a");
+}
+
+fn part_2(input: []const u8) !usize {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var circuit = Circuit.init(allocator);
+    defer circuit.deinit();
+
+    try parseCircuit(&circuit, input);
+    const signal = try circuit.getSignalAt("a");
+
+    var signal_buffer: [6]u8 = undefined;
+    const gate = Circuit.Gate{ .SIGNAL = .{
+        .in = try std.fmt.bufPrint(&signal_buffer, "{}", .{signal}),
+    } };
+    try circuit.connect(gate, "b");
+    circuit.reset();
+    return try circuit.getSignalAt("a");
 }
 
 fn parseCircuit(circuit: *Circuit, input: []const u8) !void {
@@ -41,7 +67,7 @@ fn parseConnection(line_str: []const u8) !struct { id: []const u8, in: Circuit.G
     const token_3: ?[]const u8 = input_iter.next();
 
     const gate_type = if (token_2 == null and token_3 == null)
-        Circuit.GateType.DIRECT
+        Circuit.GateType.SIGNAL
     else if (token_3 == null)
         std.meta.stringToEnum(Circuit.GateType, token_1) orelse return error.Unexpected
     else
@@ -50,8 +76,8 @@ fn parseConnection(line_str: []const u8) !struct { id: []const u8, in: Circuit.G
     return .{
         .id = output_str,
         .in = switch (gate_type) {
-            .DIRECT => .{
-                .DIRECT = .{ .in = token_1 },
+            .SIGNAL => .{
+                .SIGNAL = .{ .in = token_1 },
             },
             .AND => .{
                 .AND = .{ .in_1 = token_1, .in_2 = token_3.? },
@@ -91,7 +117,7 @@ const Circuit = struct {
 
     // NOTE: enum names must exactly match input string literals
     pub const GateType = enum {
-        DIRECT,
+        SIGNAL,
         AND,
         OR,
         LSHIFT,
@@ -99,7 +125,7 @@ const Circuit = struct {
         NOT,
     };
 
-    pub const Direct = struct {
+    pub const Signal = struct {
         in: []const u8,
     };
 
@@ -128,7 +154,7 @@ const Circuit = struct {
     };
 
     pub const Gate = union(GateType) {
-        DIRECT: Direct,
+        SIGNAL: Signal,
         AND: And,
         OR: Or,
         LSHIFT: LShift,
@@ -141,7 +167,7 @@ const Circuit = struct {
         cached_value: ?u16,
     };
 
-    pub fn getValueAt(self: *Self, id: []const u8) !u16 {
+    pub fn getSignalAt(self: *Self, id: []const u8) !u16 {
         if (std.ascii.isDigit(id[0])) {
             return try std.fmt.parseInt(u16, id, 10);
         }
@@ -152,12 +178,12 @@ const Circuit = struct {
         }
 
         const value = switch (connection.gate) {
-            .DIRECT => |gate| try self.getValueAt(gate.in),
-            .AND => |gate| try self.getValueAt(gate.in_1) & try self.getValueAt(gate.in_2),
-            .OR => |gate| return try self.getValueAt(gate.in_1) | try self.getValueAt(gate.in_2),
-            .LSHIFT => |gate| return try self.getValueAt(gate.in) << @intCast(gate.value),
-            .RSHIFT => |gate| return try self.getValueAt(gate.in) >> @intCast(gate.value),
-            .NOT => |gate| return ~(try self.getValueAt(gate.in)),
+            .SIGNAL => |gate| try self.getSignalAt(gate.in),
+            .AND => |gate| try self.getSignalAt(gate.in_1) & try self.getSignalAt(gate.in_2),
+            .OR => |gate| return try self.getSignalAt(gate.in_1) | try self.getSignalAt(gate.in_2),
+            .LSHIFT => |gate| return try self.getSignalAt(gate.in) << @intCast(gate.value),
+            .RSHIFT => |gate| return try self.getSignalAt(gate.in) >> @intCast(gate.value),
+            .NOT => |gate| return ~(try self.getSignalAt(gate.in)),
         };
 
         connection.cached_value = value;
@@ -165,14 +191,17 @@ const Circuit = struct {
     }
 
     pub fn connect(self: *Self, in: Gate, out: []const u8) !void {
-        if (self.connections.contains(out)) {
-            return error.Unexpected;
-        }
-
-        try self.connections.putNoClobber(out, .{
+        try self.connections.put(out, .{
             .gate = in,
             .cached_value = null,
         });
+    }
+
+    pub fn reset(self: *Self) void {
+        var connection_iter = self.connections.valueIterator();
+        while (connection_iter.next()) |connection| {
+            connection.cached_value = null;
+        }
     }
 };
 
@@ -194,12 +223,12 @@ test "part 1 example input" {
     defer circuit.deinit();
 
     try parseCircuit(&circuit, EXAMPLE_INPUT);
-    try testing.expectEqual(circuit.getValueAt("d"), 72);
-    try testing.expectEqual(circuit.getValueAt("e"), 507);
-    try testing.expectEqual(circuit.getValueAt("f"), 492);
-    try testing.expectEqual(circuit.getValueAt("g"), 114);
-    try testing.expectEqual(circuit.getValueAt("h"), 65412);
-    try testing.expectEqual(circuit.getValueAt("i"), 65079);
-    try testing.expectEqual(circuit.getValueAt("x"), 123);
-    try testing.expectEqual(circuit.getValueAt("y"), 456);
+    try testing.expectEqual(circuit.getSignalAt("d"), 72);
+    try testing.expectEqual(circuit.getSignalAt("e"), 507);
+    try testing.expectEqual(circuit.getSignalAt("f"), 492);
+    try testing.expectEqual(circuit.getSignalAt("g"), 114);
+    try testing.expectEqual(circuit.getSignalAt("h"), 65412);
+    try testing.expectEqual(circuit.getSignalAt("i"), 65079);
+    try testing.expectEqual(circuit.getSignalAt("x"), 123);
+    try testing.expectEqual(circuit.getSignalAt("y"), 456);
 }
