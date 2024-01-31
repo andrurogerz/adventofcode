@@ -1,18 +1,21 @@
 //! https://adventofcode.com/2015/day/9
 const std = @import("std");
 
+const Mode = enum { MIN, MAX };
+
 pub fn main() !void {
-    const input = @embedFile("input.txt");
-    const result = try part_1(input);
-    std.debug.print("part 1 result: {}\n", .{result});
+    const INPUT = @embedFile("input.txt");
+    const min = try calculate(Mode.MIN, 8, INPUT);
+    std.debug.print("part 1 result: {}\n", .{min});
+    const max = try calculate(Mode.MAX, 8, INPUT);
+    std.debug.print("part 2 result: {}\n", .{max});
 }
 
-fn part_1(comptime input: []const u8) !usize {
-    const MAX_CITIES: usize = 8;
-    var names = NameMap(MAX_CITIES){};
-    var distances = AdjacencyMatrix(MAX_CITIES){};
+fn calculate(comptime M: Mode, comptime N: usize, comptime INPUT: []const u8) !usize {
+    var names = NameMap(N){};
+    var distances = AdjacencyMatrix(N){};
 
-    var line_iter = std.mem.tokenizeSequence(u8, input, "\n");
+    var line_iter = std.mem.tokenizeSequence(u8, INPUT, "\n");
     while (line_iter.next()) |line_str| {
         var part_iter = std.mem.tokenizeSequence(u8, line_str, " ");
         const depart_city = part_iter.next() orelse return error.Unexpected;
@@ -31,18 +34,21 @@ fn part_1(comptime input: []const u8) !usize {
         distances.put(depart_id, arrive_id, distance);
         distances.put(arrive_id, depart_id, distance);
     }
-
-    const visited = std.StaticBitSet(MAX_CITIES).initEmpty();
-    return shortestTraversal(MAX_CITIES, 0, &visited, &names, &distances);
+    const visited = std.StaticBitSet(N).initEmpty();
+    return traverse(M, N, 0, &visited, &names, &distances);
 }
 
-fn shortestTraversal(comptime N: usize, prev_id: usize, visited: *const std.StaticBitSet(N), names: *const NameMap(N), distances: *const AdjacencyMatrix(N)) usize {
+fn traverse(comptime M: Mode, comptime N: usize, prev_id: usize, visited: *const std.StaticBitSet(N), names: *const NameMap(N), distances: *const AdjacencyMatrix(N)) usize {
     std.debug.assert(names.count() <= N);
     if (visited.count() == names.count()) {
         return 0;
     }
 
-    var result: usize = std.math.maxInt(usize);
+    var result: usize = switch (M) {
+        .MIN => std.math.maxInt(usize),
+        .MAX => 0,
+    };
+
     const is_first = (visited.count() == 0);
     for (0..names.count()) |next_id| {
         if (visited.isSet(next_id)) {
@@ -52,8 +58,13 @@ fn shortestTraversal(comptime N: usize, prev_id: usize, visited: *const std.Stat
         var visited_new = visited.*;
         visited_new.set(next_id);
 
-        const next_distance = if (!is_first) distances.get(prev_id, next_id) else 0;
-        result = @min(result, shortestTraversal(N, next_id, &visited_new, names, distances) + next_distance);
+        const leg_distance = if (!is_first) distances.get(prev_id, next_id) else 0;
+        const total_distance = leg_distance + traverse(M, N, next_id, &visited_new, names, distances);
+
+        result = switch (M) {
+            .MIN => @min(result, total_distance),
+            .MAX => @max(result, total_distance),
+        };
     }
 
     return result;
@@ -127,11 +138,16 @@ fn AdjacencyMatrix(comptime N: usize) type {
 
 const testing = std.testing;
 
+const EXAMPLE_INPUT =
+    \\London to Dublin = 464
+    \\London to Belfast = 518
+    \\Dublin to Belfast = 141
+;
+
 test "part 1 example input" {
-    const EXAMPLE_INPUT =
-        \\London to Dublin = 464
-        \\London to Belfast = 518
-        \\Dublin to Belfast = 141
-    ;
-    try testing.expectEqual(try part_1(EXAMPLE_INPUT), 605);
+    try testing.expectEqual(try calculate(Mode.MIN, 3, EXAMPLE_INPUT), 605);
+}
+
+test "part 2 example input" {
+    try testing.expectEqual(try calculate(Mode.MAX, 3, EXAMPLE_INPUT), 982);
 }
