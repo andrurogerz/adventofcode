@@ -1,26 +1,42 @@
-//! https://adventofcode.com/2015/day/2
+//! https://adventofcode.com/2015/day/10
 const std = @import("std");
 
 pub fn main() !void {
     const input = @embedFile("input.txt");
-    const result = try part_1(input);
-    std.debug.print("part 1 result: {}\n", .{result});
-}
 
-fn part_1(input: []const u8) !usize {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     var allocator = gpa.allocator();
+    {
+        const result = try part_1(allocator, input);
+        std.debug.print("part 1 result: {}\n", .{result});
+    }
+    {
+        const result = try part_2(allocator, input);
+        std.debug.print("part 2 result: {}\n", .{result});
+    }
+}
 
-    var expanded_str: []const u8 = try allocator.dupe(u8, input);
+fn part_1(allocator: std.mem.Allocator, input: []const u8) !usize {
+    const expanded_str = try expandN(allocator, input, 40);
     defer allocator.free(expanded_str);
-    for (0..40) |_| {
+    return expanded_str.len;
+}
+
+fn part_2(allocator: std.mem.Allocator, input: []const u8) !usize {
+    const expanded_str = try expandN(allocator, input, 50);
+    defer allocator.free(expanded_str);
+    return expanded_str.len;
+}
+
+fn expandN(allocator: std.mem.Allocator, input: []const u8, count: usize) ![]const u8 {
+    var expanded_str: []const u8 = try allocator.dupe(u8, input);
+    for (0..count) |_| {
         var prev_str = expanded_str;
         defer allocator.free(prev_str);
         expanded_str = try expand(allocator, prev_str);
     }
-
-    return expanded_str.len;
+    return expanded_str;
 }
 
 fn expand(allocator: std.mem.Allocator, input: []const u8) ![]const u8 {
@@ -66,4 +82,8 @@ test "part 1 example input" {
         defer testing.allocator.free(expanded);
         try testing.expectEqualSlices(u8, expanded, expand_sequence[idx + 1]);
     }
+    const count = expand_sequence.len - 1;
+    var expanded = try expandN(testing.allocator, "1", count);
+    defer testing.allocator.free(expanded);
+    try testing.expectEqualSlices(u8, expanded, expand_sequence[count]);
 }
