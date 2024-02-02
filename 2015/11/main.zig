@@ -3,15 +3,17 @@ const std = @import("std");
 
 pub fn main() !void {
     const input = @embedFile("input.txt");
-
-    const result = try part_1(input[0 .. input.len - 1]);
-    std.debug.print("part 1 result: {s}\n", .{result});
+    const len = input.len - 1;
+    const result_1 = try nextPassword(len, input[0..len]);
+    std.debug.print("part 1 result: {s}\n", .{result_1});
+    const result_2 = try nextPassword(len, &result_1);
+    std.debug.print("part 2 result: {s}\n", .{result_2});
 }
 
-fn part_1(comptime input: []const u8) ![input.len]u8 {
-    var new_pw = try increment(input.len, input);
+fn nextPassword(comptime len: usize, input: []const u8) ![len]u8 {
+    var new_pw = try increment(len, input);
     while (!try isValid(&new_pw)) {
-        new_pw = try increment(input.len, &new_pw);
+        new_pw = try increment(len, &new_pw);
     }
     return new_pw;
 }
@@ -44,6 +46,7 @@ fn increment(comptime len: usize, cur_pw: []const u8) ![len]u8 {
 
 fn isValid(pw: []const u8) !bool {
     var pair_count: usize = 0;
+    var run_count: usize = 0;
     var contains_sequence: bool = false;
     for (0..pw.len) |idx| {
         const ch = pw[idx];
@@ -56,24 +59,30 @@ fn isValid(pw: []const u8) !bool {
             else => {},
         }
 
-        if (idx > 0) {
-            if (ch == pw[idx - 1]) {
-                pair_count += 1;
-            }
+        if (idx == 0) {
+            run_count = 1;
+            continue;
         }
 
-        if (idx > 1) {
-            if (ch == pw[idx - 1] and ch == pw[idx - 2]) {
-                pair_count -= 1;
-            }
+        if (ch == pw[idx - 1]) {
+            run_count += 1;
+        } else {
+            // Instead of directly counting pairs, identify runs of the same
+            // character and divide each run length by two. This technique
+            // avoids counting sequences like "aaa" as two pair while properly
+            // counting "aaaa" as two pair.
+            pair_count += run_count / 2;
+            run_count = 1;
+        }
 
-            if (ch - 1 == pw[idx - 1] and ch - 2 == pw[idx - 2]) {
-                contains_sequence = true;
-            }
+        if (idx >= 2 and (ch - 1) == pw[idx - 1] and (ch - 2) == pw[idx - 2]) {
+            contains_sequence = true;
         }
     }
 
-    return pair_count > 1 and contains_sequence;
+    pair_count += run_count / 2;
+
+    return pair_count >= 2 and contains_sequence;
 }
 
 const testing = std.testing;
@@ -93,6 +102,6 @@ test "part 1 password validation" {
 }
 
 test "part 1 example input" {
-    try testing.expectEqualSlices(u8, &try part_1("abcdefgh"), "abcdffaa");
-    try testing.expectEqualSlices(u8, &try part_1("ghijklmn"), "ghjaabcc");
+    try testing.expectEqualSlices(u8, &try nextPassword(8, "abcdefgh"), "abcdffaa");
+    try testing.expectEqualSlices(u8, &try nextPassword(8, "ghijklmn"), "ghjaabcc");
 }
