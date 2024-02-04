@@ -3,14 +3,43 @@ const std = @import("std");
 
 pub fn main() !void {
     const INPUT = @embedFile("input.txt");
-    const result = try part_1(8, INPUT);
-    std.debug.print("part 1 result: {}\n", .{result});
+    {
+        const result = try part_1(8, INPUT);
+        std.debug.print("part 1 result: {}\n", .{result});
+    }
+    {
+        const result = try part_2(8, INPUT);
+        std.debug.print("part 2 result: {}\n", .{result});
+    }
 }
 
 fn part_1(comptime N: usize, comptime INPUT: []const u8) !isize {
     var sitters = NameMap(N){};
     var deltas = AdjacencyMatrix(isize, N){};
 
+    try parse(N, INPUT, &sitters, &deltas);
+
+    var seated = std.StaticBitSet(N).initEmpty();
+    seated.set(0); // always seat id 0 first to seed the arrangement
+    return traverse(N, 0, &seated, &sitters, &deltas);
+}
+
+fn part_2(comptime N: usize, comptime INPUT: []const u8) !isize {
+    var sitters = NameMap(N + 1){};
+    var deltas = AdjacencyMatrix(isize, N + 1){};
+
+    // Add myself to the set with 0 value deltas with every other person.
+    // AdjacencyMatrix values default to zero, so there is no need to add
+    // these relationship values explicitly.
+    try parse(N + 1, INPUT, &sitters, &deltas);
+    _ = sitters.add("Me");
+
+    var seated = std.StaticBitSet(N + 1).initEmpty();
+    seated.set(0); // always seat id 0 first to seed the arrangement
+    return traverse(N + 1, 0, &seated, &sitters, &deltas);
+}
+
+fn parse(comptime N: usize, comptime INPUT: []const u8, sitters: *NameMap(N), deltas: *AdjacencyMatrix(isize, N)) !void {
     var line_iter = std.mem.tokenizeSequence(u8, INPUT, "\n");
     while (line_iter.next()) |line_str| {
         var part_iter = std.mem.tokenizeSequence(u8, line_str, " ");
@@ -42,14 +71,11 @@ fn part_1(comptime N: usize, comptime INPUT: []const u8) !isize {
 
         deltas.put(sitter_id, neighbor_id, delta);
     }
-
-    var seated = std.StaticBitSet(N).initEmpty();
-    seated.set(0); // always seat id 0 first to see the arrangement
-    return traverse(N, 0, &seated, &sitters, &deltas);
 }
 
 fn traverse(comptime N: usize, prev_id: usize, seated: *const std.StaticBitSet(N), sitters: *const NameMap(N), deltas: *const AdjacencyMatrix(isize, N)) isize {
     std.debug.assert(sitters.count() <= N);
+
     if (seated.count() == sitters.count()) {
         return deltas.get(prev_id, 0) + deltas.get(0, prev_id);
     }
