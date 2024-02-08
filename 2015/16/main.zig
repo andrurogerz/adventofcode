@@ -3,17 +3,64 @@ const std = @import("std");
 
 pub fn main() !void {
     const INPUT = @embedFile("input.txt");
-    const result = try part_1(500, INPUT);
-    std.debug.print("part 1 result: {}\n", .{result});
+    const pattern = [PropCount]usize{
+        3, 7, 2, 3, 0, 0, 5, 3, 2, 1,
+    };
+    const items = try parse(500, INPUT);
+
+    var result_1: ?usize = null;
+    var result_2: ?usize = null;
+    for (items, 1..) |item, idx| {
+        if (match_1(item, pattern)) {
+            if (result_1) |_| {
+                // Only one item must match the pattern.
+                return error.Unexpected;
+            }
+            result_1 = idx;
+        }
+
+        if (match_2(item, pattern)) {
+            if (result_2) |_| {
+                // Only one item must match the pattern.
+                return error.Unexpected;
+            }
+            result_2 = idx;
+        }
+    }
+
+    if (result_1) |result| {
+        std.debug.print("part 1 result: {}\n", .{result});
+    } else {
+        return error.Unexpected;
+    }
+
+    if (result_2) |result| {
+        std.debug.print("part 2 result: {}\n", .{result});
+    } else {
+        return error.Unexpected;
+    }
 }
 
-fn part_1(comptime N: usize, comptime INPUT: []const u8) !usize {
+fn calculate(comptime N: usize, comptime INPUT: []const u8) !usize {
     const props = [PropCount]usize{
         3, 7, 2, 3, 0, 0, 5, 3, 2, 1,
     };
     const items = try parse(N, INPUT);
     for (items, 0..) |item, idx| {
-        if (match(item, props)) {
+        if (match_1(item, props)) {
+            return idx + 1;
+        }
+    }
+    return error.Unexpected;
+}
+
+fn part_2(comptime N: usize, comptime INPUT: []const u8) !usize {
+    const props = [PropCount]usize{
+        3, 7, 2, 3, 0, 0, 5, 3, 2, 1,
+    };
+    const items = try parse(N, INPUT);
+    for (items, 0..) |item, idx| {
+        if (match_2(item, props)) {
             return idx + 1;
         }
     }
@@ -37,14 +84,14 @@ const Prop = enum(usize) {
 const PropCount = std.meta.fields(Prop).len;
 
 fn parse(comptime N: usize, comptime INPUT: []const u8) ![N][PropCount]?usize {
-    var aunts: [N][PropCount]?usize = undefined;
+    var items: [N][PropCount]?usize = undefined;
     var line_iter = std.mem.tokenizeSequence(u8, INPUT, "\n");
     var count: usize = 0;
     while (line_iter.next()) |line_str| {
-        aunts[count] = try parseLine(line_str);
+        items[count] = try parseLine(line_str);
         count += 1;
     }
-    return aunts;
+    return items;
 }
 
 fn parseLine(line_str: []const u8) ![PropCount]?usize {
@@ -75,12 +122,37 @@ fn parseLine(line_str: []const u8) ![PropCount]?usize {
     return props;
 }
 
-fn match(pattern: [PropCount]?usize, props: [PropCount]usize) bool {
+fn match_1(item: [PropCount]?usize, pattern: [PropCount]usize) bool {
     for (0..PropCount) |idx| {
-        if (pattern[idx]) |prop| {
-            if (prop != props[idx]) {
+        if (item[idx]) |value| {
+            if (value != pattern[idx]) {
                 return false;
             }
+        }
+    }
+    return true;
+}
+
+fn match_2(item: [PropCount]?usize, pattern: [PropCount]usize) bool {
+    for (0..PropCount) |idx| {
+        const value = item[idx] orelse continue;
+        const prop = std.meta.intToEnum(Prop, idx) catch unreachable;
+        switch (prop) {
+            .trees, .cats => {
+                if (value <= pattern[idx]) {
+                    return false;
+                }
+            },
+            .pomeranians, .goldfish => {
+                if (value >= pattern[idx]) {
+                    return false;
+                }
+            },
+            else => {
+                if (value != pattern[idx]) {
+                    return false;
+                }
+            },
         }
     }
     return true;
