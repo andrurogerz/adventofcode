@@ -3,24 +3,33 @@ const std = @import("std");
 
 pub fn main() !void {
     const INPUT = @embedFile("input.txt");
-    const result = try part_1(4, INPUT);
-    std.debug.print("part 1 result: {}\n", .{result});
+    {
+        const result = try part_1(4, INPUT);
+        std.debug.print("part 1 result: {}\n", .{result});
+    }
+    {
+        const result = try part_2(4, INPUT);
+        std.debug.print("part 2 result: {}\n", .{result});
+    }
 }
 
 fn part_1(comptime N: usize, comptime INPUT: []const u8) !usize {
-    var ingredient_props: [N]IngredientProps = undefined;
-    var ingredient_count: usize = 0;
-    var line_iter = std.mem.tokenizeSequence(u8, INPUT, "\n");
-    while (line_iter.next()) |line_str| {
-        ingredient_props[ingredient_count] = try parseLine(line_str);
-        ingredient_count += 1;
+    var ingredient_props = try parse(N, INPUT);
+    // calories are ignored for part 1
+    for (0..N) |idx| {
+        ingredient_props[idx].calories = 0;
     }
-
-    var counts: [N]usize = [_]usize{0} ** N;
-    return maximize(N, 0, counts, ingredient_props);
+    const counts: [N]usize = [_]usize{0} ** N;
+    return maximize(N, 0, 0, counts, ingredient_props);
 }
 
-// y = (C1*c + D1*d + F1*f + T1*t) * (C2*c + D2*d + F2*f + T2*t)
+fn part_2(comptime N: usize, comptime INPUT: []const u8) !usize {
+    const ingredient_props = try parse(N, INPUT);
+    const target_calories: usize = 500;
+    const counts: [N]usize = [_]usize{0} ** N;
+    return maximize(N, 0, target_calories, counts, ingredient_props);
+}
+
 const IngredientProps = struct {
     name: []const u8,
     capacity: isize,
@@ -30,7 +39,7 @@ const IngredientProps = struct {
     calories: isize,
 };
 
-fn maximize(comptime N: usize, idx: usize, counts: [N]usize, props: [N]IngredientProps) usize {
+fn maximize(comptime N: usize, idx: usize, target_calories: usize, counts: [N]usize, props: [N]IngredientProps) usize {
     var remaining: usize = 100;
     for (0..idx) |i| {
         remaining -= counts[i];
@@ -39,24 +48,20 @@ fn maximize(comptime N: usize, idx: usize, counts: [N]usize, props: [N]Ingredien
     if (idx == N - 1) {
         var counts_new = counts;
         counts_new[idx] = remaining;
-        //for (0..N) |i| {
-        //std.debug.print("{s}:{},", .{ props[i].name, counts_new[i] });
-        //}
-        //std.debug.print("\n", .{});
-        return calculate(N, counts_new, props);
+        return calculate(N, target_calories, counts_new, props);
     }
 
     var best: usize = 0;
     for (0..(remaining + 1)) |count| {
         var counts_new = counts;
         counts_new[idx] = count;
-        best = @max(best, maximize(N, idx + 1, counts_new, props));
+        best = @max(best, maximize(N, idx + 1, target_calories, counts_new, props));
     }
 
     return best;
 }
 
-fn calculate(comptime N: usize, counts: [N]usize, props: [N]IngredientProps) usize {
+fn calculate(comptime N: usize, target_calories: usize, counts: [N]usize, props: [N]IngredientProps) usize {
     var totals = IngredientProps{
         .name = "total",
         .capacity = 0,
@@ -79,8 +84,23 @@ fn calculate(comptime N: usize, counts: [N]usize, props: [N]IngredientProps) usi
     result *= if (totals.durability < 0) 0 else @intCast(totals.durability);
     result *= if (totals.flavor < 0) 0 else @intCast(totals.flavor);
     result *= if (totals.texture < 0) 0 else @intCast(totals.texture);
-    // calories is ignored
-    return result;
+    return if (totals.calories == target_calories) result else 0;
+}
+
+fn parse(comptime N: usize, comptime INPUT: []const u8) ![N]IngredientProps {
+    var ingredient_props: [N]IngredientProps = undefined;
+    var ingredient_count: usize = 0;
+    var line_iter = std.mem.tokenizeSequence(u8, INPUT, "\n");
+    while (line_iter.next()) |line_str| {
+        ingredient_props[ingredient_count] = try parseLine(line_str);
+        ingredient_count += 1;
+    }
+
+    if (N != ingredient_count) {
+        return error.Unexpected;
+    }
+
+    return ingredient_props;
 }
 
 fn parseLine(line_str: []const u8) !IngredientProps {
@@ -128,10 +148,15 @@ fn parseLine(line_str: []const u8) !IngredientProps {
 
 const testing = std.testing;
 
+const EXAMPLE_INPUT =
+    \\Butterscotch: capacity -1, durability -2, flavor 6, texture 3, calories 8
+    \\Cinnamon: capacity 2, durability 3, flavor -2, texture -1, calories 3
+;
+
 test "part 1 example input" {
-    const EXAMPLE_INPUT =
-        \\Butterscotch: capacity -1, durability -2, flavor 6, texture 3, calories 8
-        \\Cinnamon: capacity 2, durability 3, flavor -2, texture -1, calories 3
-    ;
-    try testing.expectEqual(try part_1(2, EXAMPLE_INPUT), 62842880);
+    try testing.expectEqual(part_1(2, EXAMPLE_INPUT), 62842880);
+}
+
+test "part 2 example input" {
+    try testing.expectEqual(part_2(2, EXAMPLE_INPUT), 57600000);
 }
