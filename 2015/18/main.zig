@@ -4,12 +4,38 @@ const Grid = @import("grid.zig").Grid;
 
 pub fn main() !void {
     const input = @embedFile("./input.txt");
-    const result = try part_1(100, input);
-    std.debug.print("part 1 result: {}\n", .{result});
+    {
+        const result = try part_1(100, input);
+        std.debug.print("part 1 result: {}\n", .{result});
+    }
+    {
+        const result = try part_2(100, input);
+        std.debug.print("part 2 result: {}\n", .{result});
+    }
 }
 
 fn part_1(rounds: usize, comptime input: []const u8) !usize {
-    var light_grid = LightGrid(input.len).init(input);
+    const light_grid = LightGrid(input.len).init(input);
+    return simulate(input.len, rounds, light_grid, &.{});
+}
+
+fn part_2(rounds: usize, comptime input: []const u8) !usize {
+    const light_grid = LightGrid(input.len).init(input);
+    const corners = [_]Grid(input.len).Position{
+        .{ .row = 0, .col = 0 },
+        .{ .row = 0, .col = light_grid.grid.cols - 1 },
+        .{ .row = light_grid.grid.rows - 1, .col = light_grid.grid.cols - 1 },
+        .{ .row = light_grid.grid.rows - 1, .col = 0 },
+    };
+    return simulate(input.len, rounds, light_grid, &corners);
+}
+
+fn simulate(comptime N: usize, rounds: usize, grid: LightGrid(N), always_on: []const Grid(N).Position) usize {
+    var light_grid = grid;
+    for (always_on) |pos| {
+        light_grid.turnOn(pos);
+    }
+
     for (0..rounds) |_| {
         var light_grid_new = light_grid;
         var iter = light_grid.iterate();
@@ -25,12 +51,16 @@ fn part_1(rounds: usize, comptime input: []const u8) !usize {
                 },
             }
         }
+
         light_grid = light_grid_new;
+        for (always_on) |pos| {
+            light_grid.turnOn(pos);
+        }
     }
     return light_grid.countOn();
 }
 
-pub fn LightGrid(comptime N: usize) type {
+fn LightGrid(comptime N: usize) type {
     return struct {
         const Self = @This();
 
@@ -95,15 +125,20 @@ pub fn LightGrid(comptime N: usize) type {
 
 const testing = std.testing;
 
+const EXAMPLE_INPUT =
+    \\.#.#.#
+    \\...##.
+    \\#....#
+    \\..#...
+    \\#.#..#
+    \\####..
+    \\
+;
+
 test "part 1 example input" {
-    const EXAMPLE_INPUT =
-        \\.#.#.#
-        \\...##.
-        \\#....#
-        \\..#...
-        \\#.#..#
-        \\####..
-        \\
-    ;
     try testing.expectEqual(try part_1(4, EXAMPLE_INPUT), 4);
+}
+
+test "part 2 example input" {
+    try testing.expectEqual(try part_2(4, EXAMPLE_INPUT), 14);
 }
