@@ -1,14 +1,18 @@
 const std = @import("std");
 
+/// Parses a grid in text form with uniform row length and provides a read-only
+/// interface to access its contents.
 pub fn Grid(comptime N: usize) type {
     return struct {
         const Self = @This();
 
+        /// An addressible position within a grid.
         pub const Position = struct {
             col: usize,
             row: usize,
         };
 
+        /// Iterates the valid grid positions surrounding the specified position.
         pub const NeighborIterator = struct {
             origin: Position,
             cur_pos: Position,
@@ -63,6 +67,7 @@ pub fn Grid(comptime N: usize) type {
             }
         };
 
+        /// Iterates every valid position in the grid one at a time.
         pub const Iterator = struct {
             cur_pos: Position,
             end_pos: Position,
@@ -91,7 +96,7 @@ pub fn Grid(comptime N: usize) type {
 
         cols: usize,
         rows: usize,
-        grid: std.StaticBitSet(N),
+        data: []const u8,
 
         pub fn init(data: []const u8) Self {
             std.debug.assert(data.len <= N);
@@ -99,65 +104,47 @@ pub fn Grid(comptime N: usize) type {
             // Establish width/height of the grid.
             var cols: usize = 0;
             var rows: usize = 0;
-            var grid: std.StaticBitSet(N) = std.StaticBitSet(N).initEmpty();
             for (data, 0..) |ch, idx| {
-                switch (ch) {
-                    '#' => grid.set(idx),
-                    '.' => {},
-                    '\n' => {
-                        rows += 1;
-                        if (cols == 0) {
-                            cols = idx;
-                            continue;
-                        }
-
-                        // Every row in the input data must be the same length.
-                        std.debug.assert((idx + 1) % (cols + 1) == 0);
-                    },
-                    else => unreachable, // no other valid characters
+                if (ch != '\n') {
+                    continue;
                 }
+
+                rows += 1;
+                if (cols == 0) {
+                    cols = idx;
+                    continue;
+                }
+
+                // Every row in the input data must be the same length.
+                std.debug.assert((idx + 1) % (cols + 1) == 0);
             }
 
             return Self{
                 .rows = rows,
                 .cols = cols,
-                .grid = grid,
+                .data = data,
             };
         }
 
-        pub fn initEmpty(rows: usize, cols: usize) Self {
-            return Self{
-                .rows = rows,
-                .cols = cols,
-                .grid = std.StaticBitSet(N).initEmpty(),
-            };
+        /// Get the character at the specified grid position.
+        pub fn get(self: *const Self, pos: Position) u8 {
+            return self.data[self.getIndex(pos)];
         }
 
+        /// Return an iterator to enumerate every valid position in the grid.
         pub fn iterate(self: *const Self) Iterator {
             return Iterator.init(self);
         }
 
-        pub fn isSet(self: *const Self, pos: Position) bool {
-            return self.grid.isSet(self.getIndex(pos));
-        }
-
-        pub fn set(self: *Self, pos: Position) void {
-            self.grid.set(self.getIndex(pos));
-        }
-
-        pub fn unset(self: *Self, pos: Position) void {
-            self.grid.unset(self.getIndex(pos));
-        }
-
-        pub fn count(self: *const Self) usize {
-            return self.grid.count();
-        }
-
+        /// Return an iterator to enumerate every valid position in the grid
+        /// that is adjacent to the specified position.
         pub fn neighbors(self: *const Self, pos: Position) NeighborIterator {
             return NeighborIterator.init(pos, self);
         }
 
-        fn getIndex(self: *const Self, pos: Position) usize {
+        /// Gets the unique index into the original string for the specified
+        /// grid position.
+        pub fn getIndex(self: *const Self, pos: Position) usize {
             std.debug.assert(pos.col < self.cols);
             std.debug.assert(pos.row < self.rows);
             return pos.col + (pos.row * (self.cols + 1));

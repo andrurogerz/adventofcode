@@ -65,37 +65,45 @@ fn LightGrid(comptime N: usize) type {
         const Self = @This();
 
         grid: Grid(N),
+        lights_on: std.StaticBitSet(N),
 
         pub fn init(data: []const u8) Self {
+            const grid = Grid(N).init(data);
+            var lights_on = std.StaticBitSet(N).initEmpty();
+            var iter = grid.iterate();
+            while (iter.next()) |pos| {
+                switch (grid.get(pos)) {
+                    '#' => {
+                        lights_on.set(grid.getIndex(pos));
+                    },
+                    '.' => {},
+                    else => unreachable,
+                }
+            }
             return Self{
-                .grid = Grid(N).init(data),
+                .grid = grid,
+                .lights_on = lights_on,
             };
-        }
-
-        pub fn initEmpty(rows: usize, cols: usize) Self {
-            return Self{
-                .grid = Grid(N).initEmpty(rows, cols),
-            };
-        }
-
-        pub fn countOn(self: *const Self) usize {
-            return self.grid.count();
         }
 
         pub fn iterate(self: *const Self) Grid(N).Iterator {
             return self.grid.iterate();
         }
 
+        pub fn countOn(self: *const Self) usize {
+            return self.lights_on.count();
+        }
+
         pub fn isOn(self: *const Self, pos: Grid(N).Position) bool {
-            return self.grid.isSet(pos);
+            return self.lights_on.isSet(self.grid.getIndex(pos));
         }
 
         pub fn turnOn(self: *Self, pos: Grid(N).Position) void {
-            self.grid.set(pos);
+            self.lights_on.set(self.grid.getIndex(pos));
         }
 
         pub fn turnOff(self: *Self, pos: Grid(N).Position) void {
-            self.grid.unset(pos);
+            self.lights_on.unset(self.grid.getIndex(pos));
         }
 
         pub fn countOnNeighbors(self: *const Self, pos: Grid(N).Position) usize {
