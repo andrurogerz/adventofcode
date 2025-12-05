@@ -7,16 +7,40 @@ pub fn main() !void {
         const result = try part_1(input);
         std.debug.print("part 1 result: {}\n", .{result});
     }
+    {
+        const result = try part_2(input);
+        std.debug.print("part 2 result: {}\n", .{result});
+    }
 }
 
 pub fn part_1(input: []const u8) !usize {
+    return solve(2, input);
+}
+
+pub fn part_2(input: []const u8) !usize {
+    return solve(12, input);
+}
+
+fn solve(comptime N: usize, input: []const u8) !usize {
     var sum: usize = 0;
     var line_iter = std.mem.tokenizeSequence(u8, input, "\n");
     while (line_iter.next()) |line| {
-        if (line.len < 2) return error.InvalidInput;
-        const first = try find_max(line[0..(line.len - 1)]);
-        const second = try find_max(line[(first.pos + 1)..]);
-        sum += first.val * 10 + second.val;
+        if (line.len < N) return error.InvalidInput;
+        var start_idx: usize = 0;
+        var values: [N]usize = [_]usize{0} ** N;
+        for (0..N) |idx| {
+            const end_idx = line.len - (N - idx) + 1;
+            const next = try find_max(line[start_idx..(end_idx)]);
+            values[idx] = next.val;
+            start_idx += next.pos + 1;
+        }
+
+        var row_sum: usize = 0;
+        for (0..N) |idx| {
+            row_sum *= 10;
+            row_sum += values[idx];
+        }
+        sum += row_sum;
     }
     return sum;
 }
@@ -46,4 +70,8 @@ const EXAMPLE_INPUT =
 
 test "part 1 example input" {
     try testing.expectEqual(part_1(EXAMPLE_INPUT), 357);
+}
+
+test "part 2 example input" {
+    try testing.expectEqual(part_2(EXAMPLE_INPUT), 3121910778619);
 }
