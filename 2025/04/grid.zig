@@ -96,7 +96,7 @@ pub fn Grid(comptime N: usize) type {
 
         cols: usize,
         rows: usize,
-        data: []const u8,
+        data: [N]u8,
 
         pub fn init(data: []const u8) Self {
             std.debug.assert(data.len <= N);
@@ -119,16 +119,24 @@ pub fn Grid(comptime N: usize) type {
                 std.debug.assert((idx + 1) % (cols + 1) == 0);
             }
 
-            return Self{
+            var result = Self{
                 .rows = rows,
                 .cols = cols,
-                .data = data,
+                .data = undefined,
             };
+
+            @memcpy(&result.data, data);
+            return result;
         }
 
         /// Get the character at the specified grid position.
         pub fn get(self: *const Self, pos: Position) u8 {
             return self.data[self.getIndex(pos)];
+        }
+
+        /// Set the character at the specified grid position.
+        pub fn set(self: *Self, pos: Position, ch: u8) void {
+            self.data[self.getIndex(pos)] = ch;
         }
 
         /// Return an iterator to enumerate every valid position in the grid.
