@@ -11,6 +11,10 @@ pub fn main() !void {
         const result = try part_1(allocator, input, 1000);
         std.debug.print("part 1 result: {}\n", .{result});
     }
+    {
+        const result = try part_2(allocator, input);
+        std.debug.print("part 2 result: {}\n", .{result});
+    }
 }
 
 const Node = struct {
@@ -44,20 +48,8 @@ pub fn part_1(allocator: std.mem.Allocator, comptime input: []const u8, comptime
     @setEvalBranchQuota(50000);
     const nodes = try parse_input(comptime count_lines(input), input);
 
-    var distances: [((nodes.len - 1) * (nodes.len)) / 2]NodeDistance = undefined;
+    const distances = calculate_distances(nodes.len, nodes);
     if (connection_count >= distances.len) return error.InvalidInput;
-
-    var dist_idx: usize = 0;
-    for (0..nodes.len) |node_1_idx| {
-        for ((node_1_idx + 1)..nodes.len) |node_2_idx| {
-            const distance_sqr = nodes[node_1_idx].distance_sqr(nodes[node_2_idx]);
-            distances[dist_idx] = .{ .node_1_idx = node_1_idx, .node_2_idx = node_2_idx, .distance_sqr = distance_sqr };
-            dist_idx += 1;
-        }
-    }
-    std.debug.assert(dist_idx == distances.len);
-
-    std.mem.sort(NodeDistance, &distances, {}, NodeDistance.isLessThan);
 
     // Connect the N shortest distances. These are our graph edges.
     var connections = [_]std.ArrayList(usize){std.ArrayList(usize).init(allocator)} ** nodes.len;
@@ -68,20 +60,40 @@ pub fn part_1(allocator: std.mem.Allocator, comptime input: []const u8, comptime
         try connections[connect.node_2_idx].append(connect.node_1_idx);
     }
 
-    // Locate independent connected graphs and determine how many nodes are in each.
-    var visited = [_]bool{false} ** nodes.len;
-    var node_counts = [_]usize{0} ** nodes.len;
-    for (0..nodes.len) |node_1_idx| {
-        node_counts[node_1_idx] = count_nodes(&connections, node_1_idx, &visited);
-    }
+    const sorted_node_counts = traverse_graphs(nodes.len, connections);
 
-    // Sort the graph connection counts and multiple the three largest to return as the solution.
-    std.mem.sort(usize, &node_counts, {}, std.sort.desc(usize));
+    // Multiply the three largest to return as the solution.
     var result: usize = 1;
     for (0..3) |idx| {
-        result *= node_counts[idx];
+        result *= sorted_node_counts[idx];
     }
     return result;
+}
+
+pub fn part_2(allocator: std.mem.Allocator, comptime input: []const u8) !usize {
+    @setEvalBranchQuota(50000);
+    const nodes = try parse_input(comptime count_lines(input), input);
+
+    const distances = calculate_distances(nodes.len, nodes);
+
+    // Connect the two unconnected closest nodes one at a time until there is a single fully-
+    // connected graph. There is probably a more optimal way to solve, but this solution runs in
+    // under 1s on a modern machine so its good enough.
+    var connections = [_]std.ArrayList(usize){std.ArrayList(usize).init(allocator)} ** nodes.len;
+    defer for (connections) |node| node.deinit();
+    for (0..distances.len) |idx| {
+        const connect = distances[idx];
+        try connections[connect.node_1_idx].append(connect.node_2_idx);
+        try connections[connect.node_2_idx].append(connect.node_1_idx);
+        const sorted_node_counts = traverse_graphs(nodes.len, connections);
+        if (sorted_node_counts[1] == 0) {
+            // A zero in the first position of the traversal result indicates every node is
+            // reachable from any other node. Once we hit this condition, return the prodcut of
+            // the x coordinates from the two most recently connected nodes as the solution.
+            return nodes[connect.node_1_idx].x * nodes[connect.node_2_idx].x;
+        }
+    }
+    return error.Unexpected;
 }
 
 fn count_lines(input: []const u8) usize {
@@ -108,15 +120,40 @@ fn parse_input(comptime N: usize, input: []const u8) ![N]Node {
     return nodes;
 }
 
-fn count_nodes(connections: []const std.ArrayList(usize), node_1_idx: usize, visited: []bool) usize {
-    std.debug.assert(visited.len == connections.len);
+fn calculate_distances(comptime N: usize, nodes: [N]Node) [((N - 1) * N) / 2]NodeDistance {
+    var distances: [((N - 1) * N) / 2]NodeDistance = undefined;
+    var dist_idx: usize = 0;
+    for (0..nodes.len) |node_1_idx| {
+        for ((node_1_idx + 1)..nodes.len) |node_2_idx| {
+            const distance_sqr = nodes[node_1_idx].distance_sqr(nodes[node_2_idx]);
+            distances[dist_idx] = .{ .node_1_idx = node_1_idx, .node_2_idx = node_2_idx, .distance_sqr = distance_sqr };
+            dist_idx += 1;
+        }
+    }
+    std.debug.assert(dist_idx == distances.len);
+    std.mem.sort(NodeDistance, &distances, {}, NodeDistance.isLessThan);
+    return distances;
+}
+
+fn count_nodes(comptime N: usize, connections: [N]std.ArrayList(usize), node_1_idx: usize, visited: *[N]bool) usize {
     if (visited[node_1_idx]) return 0;
     visited[node_1_idx] = true;
     var result: usize = 1;
     for (connections[node_1_idx].items) |node_2_idx| {
-        result += count_nodes(connections, node_2_idx, visited);
+        result += count_nodes(N, connections, node_2_idx, visited);
     }
     return result;
+}
+
+fn traverse_graphs(comptime N: usize, connections: [N]std.ArrayList(usize)) [N]usize {
+    // Locate independent connected graphs and determine how many nodes are in each.
+    var visited = [_]bool{false} ** N;
+    var node_counts = [_]usize{0} ** N;
+    for (0..N) |node_1_idx| {
+        node_counts[node_1_idx] = count_nodes(N, connections, node_1_idx, &visited);
+    }
+    std.mem.sort(usize, &node_counts, {}, std.sort.desc(usize));
+    return node_counts;
 }
 
 const testing = std.testing;
@@ -147,4 +184,8 @@ const EXAMPLE_INPUT =
 
 test "part 1 example input" {
     try testing.expectEqual(part_1(testing.allocator, EXAMPLE_INPUT, 10), 40);
+}
+
+test "part 2 example input" {
+    try testing.expectEqual(part_2(testing.allocator, EXAMPLE_INPUT), 25272);
 }
